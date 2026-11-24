@@ -33,6 +33,10 @@ const parseError = (lineNo: number): Stop => new Stop(`error: parse ${lineNo}`);
 /** Empty or only whitespace. */
 const isBlank = (s: string): boolean => s.trim() === '';
 
+/** Surrounding spaces removed (and only spaces): SPEC.md says "spaces" for unified and V4A paths and V4A anchors,
+ * where it says "whitespace" for SEARCH/REPLACE paths and the marker lines. */
+const stripSpaces = (s: string): string => s.replace(/^ +/, '').replace(/ +$/, '');
+
 /** A patch's lines: split at \n, one trailing \r removed from each, no empty piece after a final \n. */
 function splitPatch(text: string): string[] {
   if (text === '') return [];
@@ -290,7 +294,7 @@ function dashPath(line: string): string | null {
   let t = line.slice(4);
   const tab = t.indexOf('\t');
   if (tab >= 0) t = t.slice(0, tab);
-  t = t.trim();
+  t = stripSpaces(t);
   if (t === '/dev/null') return null;
   if (t.startsWith('a/') || t.startsWith('b/')) t = t.slice(2);
   return t;
@@ -577,7 +581,7 @@ function parseV4A(lines: string[]): Edit[] {
     const line = lines[i]!;
     const head = heads.find(([, prefix]) => line.startsWith(prefix));
     if (head !== undefined) {
-      cur = { kind: head[0], path: line.slice(head[1].length).trim(), no: i + 1, body: [] };
+      cur = { kind: head[0], path: stripSpaces(line.slice(head[1].length)), no: i + 1, body: [] };
       sections.push(cur);
       continue;
     }
@@ -609,7 +613,7 @@ function parseV4A(lines: string[]): Edit[] {
       let k = 0;
       let moveTo: string | null = null;
       if (body.length > 0 && body[0]!.text.startsWith('*** Move to: ')) {
-        moveTo = body[0]!.text.slice('*** Move to: '.length).trim();
+        moveTo = stripSpaces(body[0]!.text.slice('*** Move to: '.length));
         k = 1;
       }
       const chunks: Chunk[] = [];
@@ -617,7 +621,7 @@ function parseV4A(lines: string[]): Edit[] {
       for (; k < body.length; k += 1) {
         const t = body[k]!.text;
         if (t.startsWith('@@')) {
-          const anchor = t.slice(2).trim();
+          const anchor = stripSpaces(t.slice(2));
           open = { anchor: anchor === '' ? null : anchor, body: [], eof: false };
           chunks.push(open);
           continue;

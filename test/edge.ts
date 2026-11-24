@@ -95,6 +95,10 @@ const cases: Case[] = [
   { name: 'seq-create-then-edit', argv: ['p'], files: { p: '[{"command":"create","path":"n.txt","file_text":"a\\nb\\n"},{"command":"str_replace","path":"n.txt","old_str":"b","new_str":"c"}]' }, exit: 0, stdout: 'A n.txt\nok: 1 file\n', changes: { 'n.txt': 'a\nc\n' } },
   { name: 'atomic-later-still-runs', argv: ['p'], files: { p: '{"command":"str_replace","path":"m.txt","old_str":"a","new_str":"b"}\n{"command":"create","path":"n.txt","file_text":"x"}\n{"command":"create","path":"n.txt","file_text":"y"}\n' }, exit: 1, stdout: 'error: missing m.txt\nerror: exists n.txt\nfailed: 2 of 3 edits\n' },
 
+  { name: 'tree-dir-replaced-by-file', argv: ['p'], files: { p: '*** Begin Patch\n*** Delete File: a/b\n*** Add File: a\n+x\n*** End Patch\n', 'a/b': 'y\n' }, exit: 0, stdout: 'A a\nD a/b\nok: 2 files\n', changes: { 'a/b': null, a: 'x\n' } },
+  { name: 'tree-create-over-dir', argv: ['p'], files: { p: '{"command":"create","path":"src","file_text":"x"}\n', 'src/x.js': 'y\n' }, exit: 1, stdout: 'error: exists src\nfailed: 1 of 1 edits\n' },
+  { name: 'tier1-context-kept', argv: ['p'], files: { p: '--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n', f: 'a  \nb\n' }, exit: 0, stdout: 'M f\nok: 1 file\n', changes: { f: 'a  \nB\n' } },
+
   // --- section 4: detection
   { name: 'detect-begin-indented', argv: ['p'], files: { p: '\n   *** Begin Patch  \n*** Add File: n.txt\n+a\n*** End Patch\n' }, exit: 0, stdout: 'A n.txt\nok: 1 file\n', changes: { 'n.txt': 'a\n' } },
   { name: 'detect-json-indented', argv: ['p'], files: { p: '\n  \t[{"command":"create","path":"n.txt","file_text":"a"}]\n' }, exit: 0, stdout: 'A n.txt\nok: 1 file\n', changes: { 'n.txt': 'a' } },
@@ -163,6 +167,8 @@ const cases: Case[] = [
   { name: 'v-move-exists', argv: ['p'], files: { p: '*** Begin Patch\n*** Update File: a.txt\n*** Move to: b.txt\n*** End Patch\n', 'a.txt': 'x\n', 'b.txt': 'y\n' }, exit: 1, stdout: 'error: exists b.txt\nfailed: 1 of 1 edits\n' },
   { name: 'v-move-unsafe', argv: ['p'], files: { p: '*** Begin Patch\n*** Update File: a.txt\n*** Move to: /b.txt\n*** End Patch\n', 'a.txt': 'x\n' }, exit: 1, stdout: 'error: unsafe /b.txt\nfailed: 1 of 1 edits\n' },
   { name: 'v-delete-with-lines', argv: ['p'], files: { p: '*** Begin Patch\n*** Delete File: a.txt\n-x\n*** End Patch\n', 'a.txt': 'x\n' }, exit: 2, stdout: 'error: parse 3\n' },
+  { name: 'v-delete-blank-then-junk', argv: ['p'], files: { p: '*** Begin Patch\n*** Delete File: a.txt\n\njunk\n*** End Patch\n', 'a.txt': 'x\n' }, exit: 2, stdout: 'error: parse 4\n' },
+  { name: 'v-delete-blank-lines-ok', argv: ['p'], files: { p: '*** Begin Patch\n*** Delete File: a.txt\n\n  \n*** Add File: b.txt\n+y\n*** End Patch\n', 'a.txt': 'x\n' }, exit: 0, stdout: 'D a.txt\nA b.txt\nok: 2 files\n', changes: { 'a.txt': null, 'b.txt': 'y\n' } },
   { name: 'v-add-bad-line', argv: ['p'], files: { p: '*** Begin Patch\n*** Add File: n.txt\n+a\nb\n*** End Patch\n' }, exit: 2, stdout: 'error: parse 4\n' },
   { name: 'v-anchor-tier1', argv: ['p'], files: { p: '*** Begin Patch\n*** Update File: a.py\n@@ def g():\n-    x = 1\n+    x = 2\n*** End Patch\n', 'a.py': 'def f():\n    x = 1\ndef g():  \n    x = 1\n' }, exit: 0, stdout: 'M a.py\nok: 1 file\n', changes: { 'a.py': 'def f():\n    x = 1\ndef g():  \n    x = 2\n' } },
   { name: 'v-update-keeps-noeol', argv: ['p'], files: { p: '*** Begin Patch\n*** Update File: a.txt\n-y\n+Y\n*** End Patch\n', 'a.txt': 'x\ny' }, exit: 0, stdout: 'M a.txt\nok: 1 file\n', changes: { 'a.txt': 'x\nY' } },

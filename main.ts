@@ -5,7 +5,7 @@
 // In a trial the grader runs `node /bot/main.ts` with MAKEFUN_ENV_URL set, and the last lines below hand the trial over
 // to the kit's runner.ts, which runs this file once per check.
 
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const FORMAT_NAMES = ['auto', 'unified', 'search-replace', 'v4a', 'json'];
@@ -101,15 +101,38 @@ class Tree {
     return this.after.has(p) ? this.after.get(p)! : this.original(p);
   }
 
-  /** Whether something is at the path now: a file, or a directory on disk the edits have not touched. */
+  /** Whether something is at the path now: a file, or a directory that still holds a file the edits left in place. */
   occupied(p: string): boolean {
     if (this.read(p) !== null) return true;
-    if (this.after.has(p)) return false;
+    const inside = `${p}/`;
+    for (const [q, text] of this.after) if (q.startsWith(inside) && text !== null) return true;
+    let isDir = false;
     try {
-      return statSync(p).isDirectory();
+      isDir = statSync(p).isDirectory();
     } catch {
-      return false;
+      isDir = false;
     }
+    if (!isDir) return false;
+    const walk = (dir: string): boolean => {
+      let names: string[] = [];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        return false;
+      }
+      for (const name of names) {
+        const q = `${dir}/${name}`;
+        let st;
+        try {
+          st = statSync(q);
+        } catch {
+          continue;
+        }
+        if (st.isDirectory() ? walk(q) : this.read(q) !== null) return true;
+      }
+      return false;
+    };
+    return walk(p);
   }
 
   write(p: string, text: string | null): void {
@@ -578,7 +601,9 @@ function parseV4A(lines: string[]): Edit[] {
       }
       edits.push(v4aAdd(s.path, fileLines));
     } else if (s.kind === 'delete') {
-      if (body.length > 0) throw parseError(body[0]!.no);
+      // A Delete File section has no lines: the first one that is not blank is the fault.
+      const stray = body.find((b) => !isBlank(b.text));
+      if (stray !== undefined) throw parseError(stray.no);
       edits.push(v4aDelete(s.path));
     } else {
       let k = 0;
@@ -882,6 +907,12 @@ function mend(args: string[], stdin: () => string): { code: number; out: string[
     }
     for (const [p, { now }] of [...changed].sort((x, y) => byteOrder(x[0], y[0]))) {
       if (now === null) continue;
+      // A directory left here holds only files the edits deleted: the file takes its place.
+      try {
+        if (statSync(p).isDirectory()) rmSync(p, { recursive: true, force: true });
+      } catch {
+        // nothing at the path yet
+      }
       mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, now);
     }

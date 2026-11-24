@@ -622,7 +622,8 @@ function parseV4A(lines: string[]): Edit[] {
           chunks.push(open);
           continue;
         }
-        if (t.trim() === '*** End of File') {
+        // The marker, trailing whitespace aside; a line that starts with a space is a context line (section 8).
+        if (t.trimEnd() === '*** End of File') {
           if (open === null) throw parseError(body[k]!.no);
           open.eof = true;
           open = null;
